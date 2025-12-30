@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Home, Package, Settings } from 'lucide-react'
+import { Home, Package, Settings, ChefHat } from 'lucide-react'
 import './index.css'
 import './modal.css'
 import './suggestions.css'
@@ -9,6 +9,7 @@ import RecentMeals from './components/RecentMeals'
 import InventoryPreview from './components/InventoryPreview'
 import InventoryPage from './components/InventoryPage'
 import SuggestedMeals from './components/SuggestedMeals'
+import KitchenManager from './components/KitchenManager'
 
 function App() {
   const [stats, setStats] = useState({
@@ -17,48 +18,48 @@ function App() {
     nearExpiry: 0
   })
   const [showInventory, setShowInventory] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleRefresh = () => {
+    console.log('Refreshing Dashboard...')
+    setRefreshKey(prev => prev + 1)
+  }
 
   useEffect(() => {
-    fetchStats()
-  }, [])
+    const fetchStats = async () => {
+      try {
+        const invRes = await fetch('http://127.0.0.1:8000/api/agent/inventory/')
+        const invData = await invRes.json()
+        const mealsRes = await fetch('http://127.0.0.1:8000/api/agent/recent-meals/?days=7')
+        const mealsData = await mealsRes.json()
 
-  const fetchStats = async () => {
-    try {
-      const invResponse = await fetch('http://127.0.0.1:8000/api/agent/inventory/')
-      const invData = await invResponse.json()
+        const nearExpiry = invData.ingredients.filter(ing => ing.urgency === 'high').length
 
-      const mealsResponse = await fetch('http://127.0.0.1:8000/api/agent/recent-meals/?days=7')
-      const mealsData = await mealsResponse.json()
-
-      const nearExpiry = invData.ingredients.filter(
-        ing => ing.urgency === 'high' || ing.urgency === 'medium'
-      ).length
-
-      setStats({
-        mealsThisWeek: mealsData.total_meals,
-        totalIngredients: invData.total_items,
-        nearExpiry: nearExpiry
-      })
-    } catch (error) {
-      console.error('Error fetching stats:', error)
+        setStats({
+          mealsThisWeek: mealsData.total_meals,
+          totalIngredients: invData.total_items,
+          nearExpiry: nearExpiry
+        })
+      } catch (e) {
+        console.error('Stats fetch error:', e)
+      }
     }
-  }
+    fetchStats()
+  }, [refreshKey])
 
   return (
     <div className="app">
       <header className="header">
         <div className="logo">
-          <Home className="logo-icon" />
-          Ammi's Recipe Assistant
+          <ChefHat className="logo-icon" style={{ color: 'var(--primary)' }} />
+          Ammi's Assistant
         </div>
         <nav className="nav">
           <button className="nav-btn" onClick={() => setShowInventory(true)}>
-            <Package size={18} />
-            Inventory
+            <Package size={18} /> Inventory
           </button>
           <button className="nav-btn">
-            <Settings size={18} />
-            Settings
+            <Settings size={18} /> Settings
           </button>
         </nav>
       </header>
@@ -66,19 +67,25 @@ function App() {
       <div className="dashboard">
         <div className="main-content">
           <QuickStats stats={stats} />
-          <SuggestedMeals />
-          <RecentMeals />
-          <InventoryPreview onViewAll={() => setShowInventory(true)} />
+
+          {/* Direct Forms for Adding Ingredients/History */}
+          <div style={{ marginBottom: '2rem' }}>
+            <KitchenManager onRefresh={handleRefresh} />
+          </div>
+
+          {/* Suggestions List */}
+          <SuggestedMeals key={`sugg-${refreshKey}`} />
+
+          <RecentMeals key={`meals-${refreshKey}`} />
+
+          <InventoryPreview key={`inv-${refreshKey}`} onViewAll={() => setShowInventory(true)} />
         </div>
 
-        <ChatPanel onMealCooked={fetchStats} />
+        <ChatPanel onMealCooked={handleRefresh} />
       </div>
 
       {showInventory && (
-        <InventoryPage onClose={() => {
-          setShowInventory(false)
-          fetchStats()
-        }} />
+        <InventoryPage onClose={() => { setShowInventory(false); handleRefresh(); }} />
       )}
     </div>
   )

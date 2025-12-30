@@ -4,41 +4,20 @@ from google.genai import types
 from django.conf import settings
 import json
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.getenv('GEMINI_API_KEY', 'AIzaSyBw4XnFJAVp78yIqAIspeLMhsXnJEC-gqw'))
+# Ensure we use the correct key
+API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyDIxFXJWj4VHXLmxCAZP33yd-u9PjwQOCI')
+client = genai.Client(api_key=API_KEY)
 
 AGENT_SYSTEM_PROMPT = """
-You are Ammi's Recipe Assistant, helping Pakistani families decide what to cook.
+You are Ammi's Recipe Assistant, a warm Pakistani mother figure.
+Your goal is to help decide what to cook using Hinglish (Urdu+English).
 
-Your personality:
-- Warm and encouraging like a helpful Ammi
-- Use simple Urdu/English mix naturally (Hinglish)
-- Suggest practical Pakistani recipes
-- Consider available ingredients, expiry dates, and recent meals
-
-Your capabilities:
-1. Check current ingredient inventory
-2. View meal history to avoid repetition
-3. Suggest recipes based on available ingredients
-4. Provide step-by-step cooking instructions
-5. Generate new recipes when needed
-
-Always prioritize:
-- Using ingredients near expiry
-- Avoiding recently cooked meals (last 3 days)
-- Practical, easy-to-follow recipes
-- Encouraging and friendly tone
-
-When greeting, use phrases like:
-- "Aaj khanay mein kya banana hai?"
-- "Kya ingredients hain ghar mein?"
-- "Main aapki madad karoon?"
-
-IMPORTANT: Keep responses concise and friendly. Use bullet points for recipes.
+LOGIC:
+- If user asks for suggestions, ALWAYS call suggest_recipes.
+- If user asks what they have, call get_current_inventory.
+- Always be polite and motherly.
 """
 
-
-# Tool functions (imported from agent_tools.py)
 from .agent_tools import (
     get_current_inventory,
     get_recent_meals,
@@ -47,92 +26,59 @@ from .agent_tools import (
     generate_new_recipe
 )
 
-
 def chat_with_agent(user_message, conversation_history=None):
-    """
-    Main function to chat with the Gemini AI agent
-    
-    Args:
-        user_message (str): User's message
-        conversation_history (list): Previous messages in conversation
-    
-    Returns:
-        dict: Agent's response and updated conversation history
-    """
     if conversation_history is None:
         conversation_history = []
     
-    # Build conversation contents for Gemini
-    contents = []
-    
-    # Add previous conversation (limit to last 10 messages to avoid quota issues)
-    recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-    for msg in recent_history:
-        if msg.get('role') == 'user':
-            contents.append(msg['content'])
-        elif msg.get('role') == 'model':
-            contents.append(msg['content'])
-    
-    # Add current user message
-    contents.append(user_message)
-    
-    # Call Gemini API with automatic function calling
+    msg_lower = user_message.lower()
+
+    # --- KEYWORD FALLBACK (If AI is busy/quota error) ---
+    # This ensures "Service Issue" doesn't happen for basic stuff
+    if any(k in msg_lower for k in ['inventory', 'kya hai', 'samann', 'items']):
+        data = get_current_inventory()
+        reply = "Beta, aapke paas ye sab hai:\n" + "\n".join([f"• {i['name']} ({i['quantity']})" for i in data['ingredients'][:5]])
+        conversation_history.append({'role': 'user', 'content': user_message})
+        conversation_history.append({'role': 'model', 'content': reply})
+        return {"message": reply, "conversation_history": conversation_history}
+
+    if any(k in msg_lower for k in ['suggest', 'kya pakaon', 'recipe', 'suggestion']):
+        data = suggest_recipes()
+        if not data['suggestions']:
+            reply = "Beta, inventory mein kuch add karo toh main suggest karoon!"
+        else:
+            reply = "Aaj ye bana lo, achay lagay gain:\n" + "\n".join([f"• {s['name']} ({s['match_percentage']}% Match)" for s in data['suggestions']])
+        conversation_history.append({'role': 'user', 'content': user_message})
+        conversation_history.append({'role': 'model', 'content': reply})
+        return {"message": reply, "conversation_history": conversation_history}
+
+    # --- AI Chat (Gemini) ---
     try:
+        contents = []
+        for msg in conversation_history[-6:]:
+            role = 'user' if msg.get('role') == 'user' else 'model'
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg['content'])]))
+        
+        contents.append(types.Content(role='user', parts=[types.Part.from_text(text=user_message)]))
+        
         response = client.models.generate_content(
             model='gemini-2.0-flash-exp',
             contents=contents,
             config=types.GenerateContentConfig(
-                tools=[
-                    get_current_inventory,
-                    get_recent_meals,
-                    suggest_recipes,
-                    mark_meal_cooked,
-                    generate_new_recipe
-                ],
+                tools=[get_current_inventory, get_recent_meals, suggest_recipes, mark_meal_cooked, generate_new_recipe],
                 system_instruction=AGENT_SYSTEM_PROMPT,
                 temperature=0.7,
-                max_output_tokens=500,  # Limit to reduce quota usage
+                max_output_tokens=500,
             )
         )
         
-        # Get response text
-        assistant_message = response.text
+        reply_text = response.text
+        conversation_history.append({'role': 'user', 'content': user_message})
+        conversation_history.append({'role': 'model', 'content': reply_text})
         
-        # Update conversation history
-        conversation_history.append({
-            'role': 'user',
-            'content': user_message
-        })
-        conversation_history.append({
-            'role': 'model',
-            'content': assistant_message
-        })
+        return {"message": reply_text, "conversation_history": conversation_history}
         
-        return {
-            "message": assistant_message,
-            "conversation_history": conversation_history
-        }
-    
     except Exception as e:
-        error_str = str(e)
-        
-        # Handle quota errors gracefully
-        if "quota" in error_str.lower() or "429" in error_str:
-            fallback_message = "Sorry, I'm experiencing high demand right now. Let me help you with a simple suggestion: Try checking your inventory and I can suggest recipes based on what you have!"
-        else:
-            fallback_message = f"Sorry, I encountered an error. Please try again or ask me to check your inventory."
-        
-        conversation_history.append({
-            'role': 'user',
-            'content': user_message
-        })
-        conversation_history.append({
-            'role': 'model',
-            'content': fallback_message
-        })
-        
-        return {
-            "message": fallback_message,
-            "conversation_history": conversation_history,
-            "error": error_str
-        }
+        print(f"Gemini Error: {e}")
+        # Final fallback if even Gemini fails
+        fallback = "Beta, main thoda thaki hui hoon. App please suggestions tab check karle ya ingredients add karein?"
+        return {"message": fallback, "conversation_history": conversation_history, "error": str(e)}

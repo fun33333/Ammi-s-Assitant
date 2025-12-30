@@ -7,7 +7,7 @@ from google.genai import types
 import os
 
 # Initialize Gemini client for recipe generation
-client = genai.Client(api_key=os.getenv('GEMINI_API_KEY', 'AIzaSyBw4XnFJAVp78yIqAIspeLMhsXnJEC-gqw'))
+client = genai.Client(api_key=os.getenv('GEMINI_API_KEY', 'AIzaSyDIxFXJWj4VHXLmxCAZP33yd-u9PjwQOCI'))
 
 
 def get_current_inventory():
@@ -78,51 +78,75 @@ def suggest_recipes(max_results: int = 3):
     inventory = get_current_inventory()
     available_ingredients = [ing["name"].lower() for ing in inventory["ingredients"]]
     
-    # Simple Pakistani recipe suggestions based on common ingredients
+    # Enhanced Pakistani recipe database
     recipe_database = [
         {
             "name": "Daal Chawal",
             "ingredients": ["lentils", "rice", "onions", "oil", "salt"],
             "cooking_time": 30,
-            "difficulty": "Easy"
+            "difficulty": "Easy",
+            "category": "Veg"
         },
         {
             "name": "Chicken Biryani",
-            "ingredients": ["chicken", "rice", "yogurt", "onions", "spices"],
+            "ingredients": ["chicken", "rice", "yogurt", "onions", "biryani masala"],
             "cooking_time": 60,
-            "difficulty": "Medium"
+            "difficulty": "Medium",
+            "category": "Non-Veg"
         },
         {
             "name": "Aloo Gobi",
-            "ingredients": ["potatoes", "cauliflower", "tomatoes", "onions", "spices"],
+            "ingredients": ["potatoes", "cauliflower", "tomatoes", "onions", "cumin"],
             "cooking_time": 25,
-            "difficulty": "Easy"
+            "difficulty": "Easy",
+            "category": "Veg"
         },
         {
             "name": "Palak Chicken",
-            "ingredients": ["chicken", "spinach", "yogurt", "onions", "spices"],
+            "ingredients": ["chicken", "spinach", "yogurt", "onions", "garlic"],
             "cooking_time": 35,
-            "difficulty": "Medium"
+            "difficulty": "Medium",
+            "category": "Non-Veg"
         },
         {
             "name": "Bhindi Masala",
-            "ingredients": ["okra", "tomatoes", "onions", "spices"],
+            "ingredients": ["okra", "tomatoes", "onions", "ginger"],
             "cooking_time": 20,
-            "difficulty": "Easy"
+            "difficulty": "Easy",
+            "category": "Veg"
         },
         {
             "name": "Aloo Anda Curry",
-            "ingredients": ["eggs", "potatoes", "tomatoes", "onions", "spices"],
+            "ingredients": ["eggs", "potatoes", "tomatoes", "onions", "cloves"],
             "cooking_time": 25,
-            "difficulty": "Easy"
+            "difficulty": "Easy",
+            "category": "Non-Veg"
+        },
+        {
+            "name": "Egg Fried Rice",
+            "ingredients": ["eggs", "rice", "soy sauce", "carrots", "onions"],
+            "cooking_time": 15,
+            "difficulty": "Easy",
+            "category": "Non-Veg"
+        },
+        {
+            "name": "Chicken Karahi",
+            "ingredients": ["chicken", "tomatoes", "ginger", "garlic", "green chilies"],
+            "cooking_time": 40,
+            "difficulty": "Medium",
+            "category": "Non-Veg"
         }
     ]
     
     # Score recipes based on available ingredients
     scored_recipes = []
     for recipe in recipe_database:
-        matching = sum(1 for ing in recipe["ingredients"] 
-                      if any(ing in avail.lower() for avail in available_ingredients))
+        # Check for fuzzy matching (if recipe ingredient is a substring of available item or vice versa)
+        matching = 0
+        for req_ing in recipe["ingredients"]:
+            if any(req_ing in avail or avail in req_ing for avail in available_ingredients):
+                matching += 1
+        
         total = len(recipe["ingredients"])
         
         if matching > 0:
@@ -134,8 +158,8 @@ def suggest_recipes(max_results: int = 3):
                 "total_ingredients": total
             })
     
-    # Sort by match percentage
-    scored_recipes.sort(key=lambda x: x["match_percentage"], reverse=True)
+    # Sort by match percentage and then difficulty
+    scored_recipes.sort(key=lambda x: (x["match_percentage"], -len(x["name"])), reverse=True)
     
     return {
         "suggestions": scored_recipes[:max_results],
