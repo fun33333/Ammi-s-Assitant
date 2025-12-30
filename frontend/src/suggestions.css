@@ -1,0 +1,77 @@
+/* Suggestion Cards */
+.suggestions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.suggestion-card {
+    background: var(--background-alt);
+    border-radius: 12px;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+
+.suggestion-card:hover {
+    box-shadow: 0 4px 12px var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.suggestion-header h4 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.match-badge {
+    padding: 0.25rem 0.625rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.match-badge.high {
+    background: #DCFCE7;
+    color: var(--success);
+}
+
+.match-badge.medium {
+    background: #FEF3C7;
+    color: var(--warning);
+}
+
+.match-badge.low {
+    background: #FEE2E2;
+    color: var(--danger);
+}
+
+.suggestion-details {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--text-light);
+}
+
+.missing-ingredients {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+}

@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { Home, Package, Settings } from 'lucide-react'
 import './index.css'
 import './modal.css'
+import './suggestions.css'
 import ChatPanel from './components/ChatPanel'
 import QuickStats from './components/QuickStats'
 import RecentMeals from './components/RecentMeals'
 import InventoryPreview from './components/InventoryPreview'
 import InventoryPage from './components/InventoryPage'
+import SuggestedMeals from './components/SuggestedMeals'
 
 function App() {
   const [stats, setStats] = useState({
@@ -14,6 +16,7 @@ function App() {
     totalIngredients: 0,
     nearExpiry: 0
   })
+  const [showInventory, setShowInventory] = useState(false)
 
   useEffect(() => {
     fetchStats()
@@ -49,7 +52,7 @@ function App() {
           Ammi's Recipe Assistant
         </div>
         <nav className="nav">
-          <button className="nav-btn">
+          <button className="nav-btn" onClick={() => setShowInventory(true)}>
             <Package size={18} />
             Inventory
           </button>
@@ -63,12 +66,20 @@ function App() {
       <div className="dashboard">
         <div className="main-content">
           <QuickStats stats={stats} />
+          <SuggestedMeals />
           <RecentMeals />
-          <InventoryPreview />
+          <InventoryPreview onViewAll={() => setShowInventory(true)} />
         </div>
 
         <ChatPanel onMealCooked={fetchStats} />
       </div>
+
+      {showInventory && (
+        <InventoryPage onClose={() => {
+          setShowInventory(false)
+          fetchStats()
+        }} />
+      )}
     </div>
   )
 }
